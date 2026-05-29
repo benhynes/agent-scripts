@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# example-api-call — template showing the recommended pattern for scripts that
+# need an API key: pull it from the macOS Keychain via agent-secret at runtime,
+# so the secret is never hardcoded, committed, or left in your shell history.
+#
+# agent-secret: https://github.com/benhynes/agent-secret
+#
+#   1. store a key once:   agent-secret set EXAMPLE_API_KEY
+#   2. run this script:    example-api-call
+set -euo pipefail
+
+# --- Pattern A: fetch the key inline --------------------------------------
+# Good for a one-off use within the script.
+if ! command -v agent-secret >/dev/null 2>&1; then
+  echo "error: agent-secret not installed (https://github.com/benhynes/agent-secret)" >&2
+  exit 1
+fi
+
+API_KEY="$(agent-secret get EXAMPLE_API_KEY)" || {
+  echo "error: no EXAMPLE_API_KEY stored. Run: agent-secret set EXAMPLE_API_KEY" >&2
+  exit 1
+}
+
+echo "Fetched EXAMPLE_API_KEY from the Keychain (${#API_KEY} chars). Making request..."
+# curl -sS -H "Authorization: Bearer $API_KEY" https://api.example.com/v1/whoami
+
+# --- Pattern B: inject as env without the key touching this script --------
+# Preferred when handing the secret to a child process. Wrap the call:
+#
+#   agent-secret run EXAMPLE_API_KEY=API_KEY -- some-tool --do-thing
+#
+# The child sees $API_KEY in its environment; nothing is written to disk.

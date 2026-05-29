@@ -1,0 +1,8 @@
+# This repo holds the SETUP only — never personal scripts or secrets.
+.DS_Store
+*.log
+
+# Safety net: if anyone develops scripts inside the repo, don't commit them.
+/bin/
+*.1pux
+*.csv
