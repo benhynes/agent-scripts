@@ -32,6 +32,12 @@ else
   echo "✓ added ~/.scripts/bin to PATH in $RC"
 fi
 
+# Install the registry tool itself into bin (always refresh it)
+if [ -f "$REPO_DIR/agent-scripts" ]; then
+  cp "$REPO_DIR/agent-scripts" "$BIN_DIR/agent-scripts" && chmod +x "$BIN_DIR/agent-scripts"
+  echo "✓ installed registry tool -> $BIN_DIR/agent-scripts"
+fi
+
 # Offer the example(s) as a starting point (copied, never symlinked to the repo)
 if [ -d "$REPO_DIR/examples" ]; then
   for ex in "$REPO_DIR"/examples/*; do

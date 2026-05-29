@@ -29,6 +29,40 @@ cp my-tool ~/.scripts/bin/ && chmod +x ~/.scripts/bin/my-tool
 my-tool        # works from anywhere
 ```
 
+## Discovering what's installed (`agent-scripts`)
+
+The installer drops an `agent-scripts` command into `~/.scripts/bin`. It's a
+**self-maintaining registry**: it scans your scripts directory and reads a
+one-line description from each script's header — nothing to keep in sync by hand.
+
+```bash
+agent-scripts list          # human-readable table of installed scripts
+agent-scripts json          # machine-readable manifest (for agents/automation)
+agent-scripts show NAME     # full header/usage for one script
+agent-scripts path          # print the scripts bin directory
+```
+
+This is handy for **agents**: at the start of a session, an agent can run
+`agent-scripts json` to discover exactly which helper scripts exist on the
+machine, instead of guessing or relying on stale notes.
+
+### Description convention
+
+Give each script a one-line description in its header (first ~15 lines). Any of:
+
+```bash
+# my-tool — what it does          # shell scripts (em dash or hyphen)
+```
+```python
+"""my-tool — what it does."""     # python scripts (module docstring)
+```
+```
+# description: what it does       # explicit form, any language
+```
+
+Otherwise the first comment line is used. Set `AGENT_SCRIPTS_PATH` (colon-
+separated) to also scan directories outside `~/.scripts/bin`.
+
 ## Secrets pattern
 
 Scripts that need API keys should **not** hardcode them. Store keys once in the

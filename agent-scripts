@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""agent-scripts — discover the helper scripts installed in ~/.scripts/bin.
+
+A self-maintaining registry: it scans the scripts directory and reads a one-line
+description from each script's header, so there's nothing to keep in sync by hand.
+
+Usage:
+    agent-scripts list           human-readable table (default)
+    agent-scripts json           machine-readable manifest (for agents)
+    agent-scripts show NAME      full header/usage for one script
+    agent-scripts path           print the scripts bin directory
+
+Description convention (any ONE of these in the first ~15 lines works):
+    # <scriptname> — one-line description        (em dash or hyphen after the name)
+    # description: one-line description
+    …otherwise the first non-shebang comment line is used.
+
+Extra directories can be scanned via AGENT_SCRIPTS_PATH (colon-separated).
+"""
+import json
+import os
+import re
+import stat
+import sys
+
+SCRIPTS_DIR = os.environ.get("SCRIPTS_DIR", os.path.expanduser("~/.scripts"))
+
+
+def scan_dirs():
+    dirs = [os.path.join(SCRIPTS_DIR, "bin")]
+    extra = os.environ.get("AGENT_SCRIPTS_PATH", "")
+    dirs += [d for d in extra.split(":") if d]
+    seen, out = set(), []
+    for d in dirs:
+        rd = os.path.realpath(d)
+        if rd in seen or not os.path.isdir(d):
+            continue
+        seen.add(rd)
+        out.append(d)
+    return out
+
+
+def is_executable(path):
+    return os.path.isfile(path) and (os.stat(path).st_mode & stat.S_IXUSR)
+
+
+def read_header(path, limit=15):
+    lines = []
+    try:
+        with open(path, "r", errors="replace") as f:
+            for i, line in enumerate(f):
+                if i >= limit:
+                    break
+                lines.append(line.rstrip("\n"))
+    except (OSError, UnicodeError):
+        pass
+    return lines
+
+
+def extract_description(name, lines):
+    body = [ln for ln in lines if not ln.startswith("#!")]
+    # Treat the opening line of a """docstring""" like a comment, so Python
+    # scripts ("""name — desc) are described the same as shell ones (# name — desc).
+    norm = []
+    for ln in body:
+        m = re.match(r'^\s*[ru]?"""\s*(.+)$', ln, re.I)
+        if m:
+            norm.append("# " + m.group(1).strip().rstrip('"').strip())
+        else:
+            norm.append(ln)
+    body = norm
+    # 1) "# <name> — desc" / "# <name> - desc"
+    pat = re.compile(r"^#\s*" + re.escape(name) + r"\s*[—:-]+\s*(.+)$")
+    for ln in body:
+        m = pat.match(ln)
+        if m:
+            return m.group(1).strip()
+    # 2) "# description: desc"
+    for ln in body:
+        m = re.match(r"^#\s*description:\s*(.+)$", ln, re.I)
+        if m:
+            return m.group(1).strip()
+    # 3) first meaningful comment line
+    for ln in body:
+        m = re.match(r"^#\s*(.+)$", ln)
+        if m and m.group(1).strip() not in ("", "-*- coding: utf-8 -*-"):
+            return m.group(1).strip()
+    return ""
+
+
+def collect():
+    items = []
+    for d in scan_dirs():
+        for entry in sorted(os.listdir(d)):
+            path = os.path.join(d, entry)
+            if entry.startswith(".") or not is_executable(path):
+                continue
+            lines = read_header(path)
+            items.append({
+                "name": entry,
+                "description": extract_description(entry, lines),
+                "path": path,
+            })
+    return items
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
+
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+
+    if cmd == "path":
+        print(os.path.join(SCRIPTS_DIR, "bin"))
+        return
+
+    items = collect()
+
+    if cmd == "json":
+        print(json.dumps(items, indent=2))
+        return
+
+    if cmd == "show":
+        if len(sys.argv) < 3:
+            sys.exit("usage: agent-scripts show NAME")
+        target = sys.argv[2]
+        for it in items:
+            if it["name"] == target:
+                print("\n".join(read_header(it["path"], limit=40)))
+                return
+        sys.exit(f"agent-scripts: not found: {target}")
+
+    if cmd == "list":
+        if not items:
+            print(f"No scripts found in {os.path.join(SCRIPTS_DIR, 'bin')}", file=sys.stderr)
+            return
+        width = max(len(it["name"]) for it in items)
+        for it in items:
+            desc = it["description"] or "(no description)"
+            print(f"  {it['name']:<{width}}  {desc}")
+        return
+
+    sys.exit(f"agent-scripts: unknown command: {cmd} (try --help)")
+
+
+if __name__ == "__main__":
+    main()
